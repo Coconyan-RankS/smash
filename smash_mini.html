@@ -1,0 +1,1147 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Smash Mini — Mario Prototype</title>
+<style>
+  body{background:#071028;color:#e6eef8;font-family:system-ui,Segoe UI,Roboto,Arial;margin:0;display:flex;align-items:center;justify-content:center;height:100vh}
+  .wrap{width:880px}
+  canvas{background:linear-gradient(#7fb3ff,#123256);width:100%;display:block;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,0.6)}
+  .hud{display:flex;justify-content:space-between;margin-top:8px;font-size:14px}
+  .muted{color:#9fb3c8}
+  .controls{margin-top:8px;color:#cfe9ff;font-size:13px}
+  button{background:#0b1220;color:#e6eef8;border:1px solid rgba(255,255,255,0.04);padding:6px 10px;border-radius:6px;cursor:pointer}
+  .tutorial-modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:9999;justify-content:center;align-items:center}
+  .tutorial-modal.active{display:flex}
+  .tutorial-content{background:#0b1220;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:30px;max-width:600px;box-shadow:0 20px 60px rgba(0,0,0,0.8)}
+  .tutorial-content h2{margin:0 0 15px 0;color:#7fb3ff}
+  .tutorial-content p{margin:10px 0;line-height:1.5;color:#cfe9ff}
+  .tutorial-content strong{color:#fff}
+  .tutorial-step{margin:15px 0;padding:12px;background:rgba(127,179,255,0.1);border-left:3px solid #7fb3ff;border-radius:4px}
+  .tutorial-controls{display:flex;gap:10px;justify-content:center;margin-top:20px}
+  .tutorial-controls button{padding:8px 16px;font-size:14px}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <canvas id="game" width="880" height="500"></canvas>
+    <div id="tutorialModal" class="tutorial-modal">
+      <div class="tutorial-content">
+        <h2 id="tutorialTitle">Tutorial - ¡Aprende a Jugar!</h2>
+        <div id="tutorialBody"></div>
+        <div class="tutorial-controls">
+          <button id="tutorialPrev" style="display:none">← Anterior</button>
+          <button id="tutorialNext">Siguiente →</button>
+          <button id="tutorialClose">Cerrar</button>
+        </div>
+      </div>
+    </div>
+    <div class="hud">
+      <div id="leftHud">Player1 — %: <span id="p1percent">0</span> | Stocks: <span id="p1stocks">3</span></div>
+      <div id="msg" class="muted"><strong>Ataque direccional:</strong> Click sube/baja/neutral. P1: A/D mover, W salto, Click ataque (↑/↓ para direcciones). P2: ←/→ mover, ↑ salto, Click ataque. Especiales: P1 Z, P2 C.</div>
+      <div id="rightHud">Player2 — %: <span id="p2percent">0</span> | Stocks: <span id="p2stocks">3</span></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:8px;align-items:center">
+      <div class="muted">Escenario:</div>
+      <select id="stageSelect">
+        <option value="0">Pradera</option>
+        <option value="1">Templo</option>
+        <option value="2">Isla flotante</option>
+      </select>
+      <div style="width:18px"></div>
+      <div class="muted">P1 personaje:</div>
+      <select id="charP1">
+        <option value="Mario">Mario</option>
+        <option value="Ninja">Ninja</option>
+        <option value="Tank">Tank</option>
+      </select>
+      <div class="muted">P2 personaje:</div>
+      <select id="charP2">
+        <option value="Ninja">Ninja</option>
+        <option value="Mario">Mario</option>
+        <option value="Tank">Tank</option>
+      </select>
+      <button id="startMatch">Start Match</button>
+      <button id="tutorialBtn" style="margin-left:10px">📚 Tutorial</button>
+    </div>
+    <div class="controls muted" style="margin-top:8px">Player 1 usa a <strong>Mario</strong> (dibujado en canvas). Pulsa el botón si quieres alternar a personaje genérico.</div>
+    <div style="margin-top:8px"><button id="toggleP1">Alternar jugador 1 (Mario / Genérico)</button></div>
+    <div class="muted" style="margin-top:8px; font-size:12px"><strong>Especiales:</strong> P1: Z | P2: C</div>
+
+    <hr style="margin-top:12px; border:0; border-top:1px solid rgba(255,255,255,0.04)">
+    <div id="editor" style="margin-top:12px; background:rgba(0,0,0,0.12); padding:10px; border-radius:8px">
+      <strong>Editor de Sprite / Animaciones (opción C)</strong>
+      <div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap">
+        <div>
+          <label>Frame W:</label>
+          <input id="frameW" type="number" value="64" style="width:72px">
+        </div>
+        <div>
+          <label>Frame H:</label>
+          <input id="frameH" type="number" value="64" style="width:72px">
+        </div>
+        <div>
+          <button id="applyGrid">Aplicar grid</button>
+        </div>
+      </div>
+
+      <hr style="margin:8px 0; border:0; border-top:1px solid rgba(255,255,255,0.03)">
+
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+        <div>
+          <label>Animación - nombre:</label>
+          <input id="animName" type="text" placeholder="ej: jab" style="width:140px">
+        </div>
+        <div>
+          <label>Frames (csv):</label>
+          <input id="animFrames" type="text" placeholder="0,1,2" style="width:140px">
+        </div>
+        <div>
+          <label>FPS:</label>
+          <input id="animFPS" type="number" value="12" style="width:72px">
+        </div>
+        <div>
+          <label>Loop:</label>
+          <input id="animLoop" type="checkbox" checked>
+        </div>
+        <div>
+          <button id="addAnim">Añadir/Actualizar animación</button>
+        </div>
+        <div>
+          <label>Animaciones:</label>
+          <select id="animList" style="min-width:160px"></select>
+          <button id="playAnim">Play</button>
+          <button id="assignP1">Asignar a P1</button>
+        </div>
+      </div>
+
+      <hr style="margin:8px 0; border:0; border-top:1px solid rgba(255,255,255,0.03)">
+
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+        <div>
+          <label>Hitframe - anim:</label>
+          <select id="hitAnim" style="width:140px"></select>
+        </div>
+        <div>
+          <label>Frame idx:</label>
+          <input id="hitFrameIdx" type="number" value="0" style="width:72px">
+        </div>
+        <div>
+          <label>x,y,w,h:</label>
+          <input id="hitBoxSpec" type="text" placeholder="x,y,w,h" style="width:140px">
+        </div>
+        <div>
+          <label>Damage:</label>
+          <input id="hitDamage" type="number" value="8" style="width:72px">
+        </div>
+        <div>
+          <label>KB:</label>
+          <input id="hitKB" type="number" value="220" style="width:72px">
+        </div>
+        <div>
+          <button id="addHitframe">Añadir hitframe</button>
+        </div>
+      </div>
+
+      <div style="margin-top:8px; font-size:13px" class="muted">Notas: introduce frames por índice en la cuadrícula. Añade animaciones y hitframes, pulsa "Asignar a P1" para probar.</div>
+    </div>
+  </div>
+
+<script>
+// Smash Mini — Mario prototype (Player1 drawn as Mario-like character using shapes)
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+const floorY = H - 80;
+const leftBound = -200, rightBound = W + 200;
+
+// Physics
+const GRAVITY = 2000;
+const MOVE_ACC = 1600;
+const MAX_SPEED = 420;
+const AIR_ACC = 900;
+const FRICTION = 0.85;
+const JUMP_V = 780;
+const BASE_KB = 750; // Massive knockback increase
+
+// Tutorial content
+const tutorialSteps = [
+  {
+    title: '¡Bienvenido a Smash Mini!',
+    content: '<p>Este es un juego de lucha inspirado en Super Smash Bros. El objetivo es <strong>eliminar a tu oponente</strong> usando ataques y knockback.</p><p>¡Aprende los controles y domina el campo de batalla! 🎮</p>'
+  },
+  {
+    title: 'Controles Básicos — Movimiento',
+    content: '<p><strong>Jugador 1:</strong> A/D para mover izquierda/derecha</p><p><strong>Jugador 2:</strong> ← / → para mover</p><p>Los personajes se aceleran gradualmente y desaceleran cuando sueltas las teclas.</p>'
+  },
+  {
+    title: 'Controles Básicos — Salto',
+    content: '<p><strong>Jugador 1:</strong> W para saltar</p><p><strong>Jugador 2:</strong> ↑ para saltar</p><p>Puedes saltar más alto si presionas la tecla más tiempo. También puedes saltar <strong>desde las plataformas azules</strong>.</p>'
+  },
+  {
+    title: 'Ataque Normal',
+    content: '<p><strong>Jugador 1 & 2:</strong> Click para atacar</p><p>Cada ataque hace daño (%) al oponente y lo lanza (knockback). A mayor daño, mayor knockback recibe.</p><p>Diferentes personajes tienen ataques con distinto daño y poder.</p>'
+  },
+  {
+    title: 'Ataques Direccionales',
+    content: '<p>Puedes dirigir tus ataques combinando teclas:</p><p><strong>↑ + Click:</strong> Ataque hacia arriba (Up-tilt)</p><p><strong>↓ + Click:</strong> Ataque hacia abajo (Down-tilt)</p><p><strong>← o → + Click:</strong> Ataques laterales</p><p>Cada dirección tiene hitboxes y knockback distintos. ¡Experimenta!</p>'
+  },
+  {
+    title: 'Ataque Especial',
+    content: '<p><strong>Jugador 1:</strong> Z para especial</p><p><strong>Jugador 2:</strong> C para especial</p><p>Cada personaje tiene un ataque especial único:</p><p>🔥 <strong>Mario:</strong> Lanza fuego (projectil)</p><p>⚡ <strong>Ninja:</strong> Dash rápido en el aire</p><p>💪 <strong>Tank:</strong> Smash pesado con alto knockback</p>'
+  },
+  {
+    title: 'Objetivos del Juego',
+    content: '<p>⚠️ <strong>Blastzones:</strong> Las líneas rojas punteadas son los límites del mapa. ¡Si sales, te K.O.!</p><p>🔴 Cada jugador comienza con <strong>3 stocks</strong> (vidas).</p><p>📊 Tu <strong>porcentaje (%)</strong> sube con cada golpe recibido.</p><p>🎯 <strong>Objetivo:</strong> Elimina los 3 stocks de tu oponente antes de que elimine los tuyos.</p>'
+  },
+  {
+    title: 'Personajes',
+    content: '<p><strong>Mario (Equilibrado):</strong> Velocidad media, salto normal. Especial: fuego.</p><p><strong>Ninja (Aéreo):</strong> Muy rápido, buen en el aire. Especial: dash.</p><p><strong>Tank (Pesado):</strong> Lento pero fuerte, especial muy poderoso.</p><p>Elige el personaje que más te guste y practica. ¡Cada uno tiene su estilo!</p>'
+  },
+  {
+    title: 'Consejos Prácticos',
+    content: '<p>💡 <strong>Knockback:</strong> El knockback aumenta según tu %. Lanza más fuerte cuando tengas alto daño.</p><p>💡 <strong>Plataformas:</strong> Las plataformas azules te permiten recuperarte. Salta desde ellas estratégicamente.</p><p>💡 <strong>Espaciado:</strong> Mantén distancia para atacar sin recibir. Los especiales son poderosos pero lentos.</p><p>💡 <strong>Combos:</strong> Ataca rápido para encadenar golpes. ¡El knockback se acumula!</p>'
+  },
+  {
+    title: '¡A Jugar!',
+    content: '<p>Ahora ya sabes los controles básicos y mecánicas.</p><p>Selecciona un escenario, elige personajes y haz clic en <strong>Start Match</strong>.</p><p>¡Demuestra tus habilidades y convierte a tu oponente en K.O.! 🏆</p>'
+  }
+];
+
+let tutorialStep = 0;
+let players = []; let hitboxes = [];
+let projectiles = [];
+const keys = {};
+window.addEventListener('keydown', e=>{ keys[e.key] = true; if(e.key==='r') reset(); });
+window.addEventListener('keyup', e=>{ keys[e.key] = false; });
+
+// Player 1 special attack: Z key
+window.addEventListener('keydown', (e)=>{
+  if((e.key === 'z' || e.key === 'Z') && players && players[0]){
+    e.preventDefault();
+    if(players[0]._specialAttack) players[0]._specialAttack();
+  }
+});
+
+// Player 2 special attack: C key (or Ctrl)
+window.addEventListener('keydown', (e)=>{
+  if((e.key === 'c' || e.key === 'C') && players && players[1]){
+    e.preventDefault();
+    if(players[1]._specialAttack) players[1]._specialAttack();
+  }
+});
+
+// Audio (simple tones)
+const AudioCtx = window.AudioContext || window.webkitAudioContext; let audioCtx = null;
+function ensureAudio(){ if(!audioCtx) audioCtx = new AudioCtx(); }
+function tone(freq, dur=0.08, type='sine', gain=0.08){ ensureAudio(); const o=audioCtx.createOscillator(); const g=audioCtx.createGain(); o.type=type; o.frequency.value=freq; o.connect(g); g.connect(audioCtx.destination); g.gain.setValueAtTime(gain,audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+dur); o.start(); o.stop(audioCtx.currentTime+dur+0.02); }
+function sfxHit(){ tone(700,0.08,'square',0.08); }
+function sfxKO(){ tone(160,0.18,'sawtooth',0.12); }
+function sfxJump(){ tone(900,0.06,'triangle',0.06); }
+
+// === Characters & Stages configuration ===
+const CHARACTERS = {
+  'Mario': { kind: 'mario', color: '#ff6b6b', moveSpeed: 200, jumpV: JUMP_V, focus: 'balanced',
+    moves: { jab: {damage:10, kb:480}, fair: {damage:12, kb:550}, special: {damage:16, kb:600} },
+    specialFunc: function(player){
+      // Mario lanza fuego (projectil) que aturde
+      const angle = player.vy < 0 ? -0.3 : 0;
+      const dir = player.facing || 1;
+      const projectile = {
+        x: player.x + (dir > 0 ? 30 : 18), y: player.y + 20, vx: dir * 320 + player.vx*0.3, vy: angle * 100,
+        radius: 6, damage: 14, kb: 220, owner: player, dur: 2, speed: 0, stun: 0.7
+      };
+      projectiles.push(projectile);
+      player.vx -= dir * 30;
+    }
+  },
+  'Ninja': {
+    kind: 'ninja', color: '#9b59b6', moveSpeed: 280, jumpV: JUMP_V*1.05, focus: 'air',
+    moves: { jab: {damage:8, kb:350}, fair: {damage:14, kb:420}, special: {damage:18, kb:380} },
+    specialFunc: function(player){
+      // Ninja hace dash rápido en el aire o en el suelo
+      const dir = player.facing || 1;
+      player.vx = dir * 450;
+      if(!player.onGround) player.vy = 0;
+      player._dashActive = 0.15;
+      // Create hitbox for dash damage
+      const hb = {
+        x: player.x + (dir > 0 ? 40 : -40), y: player.y + 10, w: 50, h: 50,
+        owner: player, dur: 0.15, damage: 2, kb: 80
+      };
+      hitboxes.push(hb);
+    }
+  },
+  'Tank': {
+    kind: 'tank', color: '#f59e0b', moveSpeed: 120, jumpV: JUMP_V*0.75, focus: 'heavy',
+    moves: { jab: {damage:14, kb:650}, fair: {damage:10, kb:800}, special: {damage:22, kb:1600} },
+    specialFunc: function(player){
+      // Tank hace un smash pesado con knockback ULTRA MASIVO
+      const dir = player.facing || 1;
+      const dmg = 22, kb = 1600; // ULTRA massive knockback
+      const hb = {
+        x: player.x + (dir > 0 ? 50 : -80), y: player.y + 10, w: 60, h: 50,
+        owner: player, dur: 0.22, damage: dmg, kb: kb
+      };
+      hitboxes.push(hb);
+      player.vx -= dir * 50;
+    }
+  }
+};
+
+const STAGES = [
+  { 
+    name: 'Pradera', bg: ['#87e08d','#1f8a4c'], 
+    platforms: [ {x:180,y:320,w:120,h:12}, {x:420,y:260,w:120,h:12} ],
+    blastzones: { top: -120, bottom: 600, left: -150, right: W + 150 }
+  },
+  { 
+    name: 'Templo', bg: ['#d6c0a8','#6b4f3a'], 
+    platforms: [ {x:200,y:300,w:160,h:12}, {x:480,y:220,w:140,h:12}, {x:360,y:380,w:100,h:12} ],
+    blastzones: { top: -130, bottom: 580, left: -160, right: W + 160 }
+  },
+  { 
+    name: 'Isla flotante', bg: ['#87ceeb','#1e3a8a'], 
+    platforms: [
+      // Center top platform (drop-through capable)
+      {x: 340, y: 180, w: 200, h: 12},
+      // Left side platform (mid-height, solid)
+      {x: 80, y: 300, w: 120, h: 12},
+      // Right side platform (mid-height, solid)
+      {x: 680, y: 300, w: 120, h: 12}
+    ],
+    blastzones: { top: -150, bottom: 650, left: -200, right: W + 200 }
+  }
+];
+
+let selectedStage = 0;
+function applySelections(){ const s = parseInt(document.getElementById('stageSelect').value)||0; selectedStage = Math.max(0, Math.min(STAGES.length-1, s)); const c1 = document.getElementById('charP1').value || 'Mario'; const c2 = document.getElementById('charP2').value || 'Ninja'; // apply to player instances if present
+  if(players && players[0]){ applyCharacterToPlayer(players[0], CHARACTERS[c1]); }
+  if(players && players[1]){ applyCharacterToPlayer(players[1], CHARACTERS[c2]); }
+  msg(`Escenario: ${STAGES[selectedStage].name} | P1: ${c1} | P2: ${c2}`);
+}
+
+function applyCharacterToPlayer(p, charData){
+  if(!p || !charData) return;
+  p.charData = charData;
+  p.kind = charData.kind || p.kind;
+  p.color = charData.color || p.color;
+  p.moveSpeed = charData.moveSpeed || p.moveSpeed;
+  p.jumpV = charData.jumpV || JUMP_V;
+  
+  // Apply character-specific sizing and mass
+  if(charData.kind === 'tank'){
+    p.w = 84; // increased size for Tank (larger & heavier)
+    p.h = 126;
+    p.mass = 2.0; // Tank is heavier: knockback has less effect
+  } else if(charData.kind === 'ninja'){
+    p.w = 36; // 75% size
+    p.h = 54;
+    p.mass = 0.85; // Ninja is slightly lighter
+  } else {
+    p.w = 48; // Default (Mario)
+    p.h = 72;
+    p.mass = 1.0;
+  }
+  
+  p._specialCooldown = 0;
+  // Attach animator: prefer Mario sprite sheet if available, otherwise use procedural animators
+  if(charData.kind === 'mario'){
+    if(typeof marioAnimatorTemplate !== 'undefined' && marioAnimatorTemplate){
+      p.animator = cloneAnimator(marioAnimatorTemplate);
+      p.useSprites = true;
+      p.animator.play('idle');
+      attachAnimatorHitframeHandler(p);
+    } else {
+      p.animator = createProceduralAnimator('mario');
+      p.useSprites = true;
+      p.animator.play('idle');
+    }
+  } else if(charData.kind === 'ninja' || charData.kind === 'tank'){
+    p.animator = createProceduralAnimator(charData.kind);
+    p.useSprites = true;
+    p.animator.play('idle');
+  }
+  // override Player._charMove to use character move damage/kb
+  p._charMove = function(moveName){
+    const mv = (p.charData && p.charData.moves && p.charData.moves[moveName]) || {damage:10,kb:BASE_KB};
+    const dir = p.facing||1;
+    const hb = { x: p.x + (dir>0? p.w : -40), y: p.y + 20, w: 40, h: 30, owner: p, dur: 0.18, damage: mv.damage, kb: mv.kb };
+    hitboxes.push(hb);
+    if(mv.kb) p.vx += dir*20;
+  };
+  // attach special function
+  p._specialAttack = function(){
+    if(p._specialCooldown > 0) return;
+    const oldFacing = p.facing; // Save facing direction
+    if(charData.specialFunc) charData.specialFunc(p);
+    p.facing = oldFacing; // Restore facing direction to prevent turn-around
+    p._specialCooldown = 0.8;
+  };
+}
+
+
+// SpriteSheet / Animator (simple)
+class SpriteSheet{
+  constructor(img, frameW=32, frameH=32){
+    this.img = img; this.frameW = frameW; this.frameH = frameH;
+    this.cols = Math.floor(img.width / frameW) || 1;
+    this.rows = Math.floor(img.height / frameH) || 1;
+  }
+  frameRect(index){
+    const col = index % this.cols;
+    const row = Math.floor(index / this.cols);
+    return {sx: col*this.frameW, sy: row*this.frameH, w: this.frameW, h: this.frameH};
+  }
+}
+
+class Animator{
+  constructor(spriteSheet){
+    this.sheet = spriteSheet;
+    this.animations = {}; this.current = null; this.frameIndex = 0; this.time = 0; this.playing = true;
+  }
+  define(name, frames, fps=12, loop=true){ this.animations[name] = {frames, fps, loop}; }
+  play(name){ if(this.current !== name){ this.current = name; this.frameIndex = 0; this.time = 0; this.playing = true; }}
+  update(dt){ if(!this.current) return; const anim = this.animations[this.current]; if(!anim) return; this.time += dt; const frameTime = 1/anim.fps; while(this.time >= frameTime){ this.time -= frameTime; this.frameIndex++; if(this.frameIndex >= anim.frames.length){ if(anim.loop) this.frameIndex = 0; else { this.frameIndex = anim.frames.length-1; this.playing = false; } } } }
+  draw(ctx,x,y,w,h,flip=false){ if(!this.current) return; const anim = this.animations[this.current]; if(!anim) return; const fi = anim.frames[this.frameIndex % anim.frames.length]; const r = this.sheet.frameRect(fi);
+    ctx.save(); if(flip){ ctx.translate(x + w/2, 0); ctx.scale(-1,1); ctx.translate(-(x + w/2), 0); }
+    ctx.drawImage(this.sheet.img, r.sx, r.sy, r.w, r.h, x, y, w, h);
+    ctx.restore(); }
+}
+
+// Try to load Mario sprite sheet if present
+let marioSprite = null;
+let marioAnimatorTemplate = null;
+const marioImg = new Image();
+marioImg.src = 'assets/mario_ssb.png';
+marioImg.onload = ()=>{
+  try{
+    marioSprite = new SpriteSheet(marioImg, 64, 64); // sprite sheet uses 64x64 grid cells
+    marioAnimatorTemplate = new Animator(marioSprite);
+    
+    // === ANIMACIONES MAPEADAS DEL SPRITE SHEET ===
+    // Row 0: Idle (frames 0-5, ~6 frames)
+    marioAnimatorTemplate.define('idle', [0,1,2,3,4,5], 8, true);
+    
+    // Row 1: Jump ascent (frames 6-7)
+    marioAnimatorTemplate.define('jump', [6,7], 6, false);
+    
+    // Row 2: Running (frames 8-13, ~6 frames)
+    marioAnimatorTemplate.define('running', [8,9,10,11,12,13], 14, true);
+    
+    // Row 3: Falling/Free fall (frames 14-15)
+    marioAnimatorTemplate.define('falling', [14,15], 6, true);
+    
+    // Row 4: Jab (frames 16-18, ataque básico rápido)
+    marioAnimatorTemplate.define('jab', [16,17,18], 16, false);
+    
+    // Row 5: Forward-Air (frames 20-23, ataque aéreo frontal)
+    marioAnimatorTemplate.define('fair', [20,21,22,23], 12, false);
+    
+    // Row 3bis: Down-Tilt (frames 24-25)
+    marioAnimatorTemplate.define('down_tilt', [24,25], 12, false);
+    
+    // Row 6: Up-Tilt (frames 26-27)
+    marioAnimatorTemplate.define('up_tilt', [26,27], 12, false);
+    
+    // Row 7: Grab/Throw (frames 28-32)
+    marioAnimatorTemplate.define('grab', [28,29,30,31,32], 12, false);
+    
+    // === HITFRAMES (cuando el sprite genera hitboxes) ===
+    // Jab: golpe rápido, hitframe en frame 1 (el frame más activo)
+    marioAnimatorTemplate.animations['jab'].hitframes = [
+      { frame: 1, box: {x:30, y:10, w:32, h:28}, damage: 8, kb: 180 }
+    ];
+    
+    // Forward-Air: ataque aéreo frontal, hitframe en frame 2 (peak)
+    marioAnimatorTemplate.animations['fair'].hitframes = [
+      { frame: 2, box: {x:28, y:8, w:36, h:32}, damage: 12, kb: 240 }
+    ];
+    
+    // Down-Tilt: golpe bajo
+    marioAnimatorTemplate.animations['down_tilt'].hitframes = [
+      { frame: 1, box: {x:20, y:30, w:40, h:20}, damage: 9, kb: 200 }
+    ];
+    
+    // Up-Tilt: golpe hacia arriba
+    marioAnimatorTemplate.animations['up_tilt'].hitframes = [
+      { frame: 1, box: {x:24, y:-10, w:28, h:38}, damage: 10, kb: 210 }
+    ];
+    
+    // Grab: ataque de agarre
+    marioAnimatorTemplate.animations['grab'].hitframes = [
+      { frame: 1, box: {x:32, y:6, w:28, h:36}, damage: 0, kb: 0 } // grab no hace damage directo
+    ];
+    
+    console.log('Mario sprite sheet (64x64) loaded con animaciones y hitframes mapeados.');
+    // If players already exist, attach animator to player 1
+    if(players && players[0]){
+      players[0].animator = cloneAnimator(marioAnimatorTemplate);
+      players[0].useSprites = true;
+      players[0].animator.play('idle');
+      attachAnimatorHitframeHandler(players[0]);
+    }
+  }catch(e){ console.warn('Error setting up mario sprite:', e); }
+};
+
+// Procedurally generate simple sprite sheets for Ninja and Tank (3 frames: idle0, idle1, jump)
+let ninjaSprite = null; let ninjaAnimatorTemplate = null;
+let tankSprite = null; let tankAnimatorTemplate = null;
+function generateProceduralSheet(kind, frameW=64, frameH=96){
+  const canvas2 = document.createElement('canvas');
+  canvas2.width = frameW * 3; canvas2.height = frameH;
+  const cctx = canvas2.getContext('2d');
+  for(let i=0;i<3;i++){
+    if(kind === 'ninja') drawNinja(cctx, i*frameW, 0, frameW, frameH, 1, i);
+    else if(kind === 'tank') drawTank(cctx, i*frameW, 0, frameW, frameH, 1, i);
+    else if(kind === 'mario') drawMario(cctx, i*frameW, 0, frameW, frameH, 1, i);
+  }
+  const img = new Image(); img.src = canvas2.toDataURL();
+  img.onload = ()=>{
+    const spr = new SpriteSheet(img, frameW, frameH);
+    const anim = new Animator(spr);
+    anim.define('idle',[0,1],2,true);
+    anim.define('running',[0,1],8,true);
+    anim.define('jump',[2],1,false);
+    anim.define('falling',[2],1,true);
+    if(kind === 'ninja'){
+      ninjaSprite = spr; ninjaAnimatorTemplate = anim;
+      if(players && players.length) players.forEach(p=>{ if(p.kind==='ninja'){ p.animator = cloneAnimator(ninjaAnimatorTemplate); p.useSprites = true; p.animator.play('idle'); } });
+    }
+    if(kind === 'tank'){
+      tankSprite = spr; tankAnimatorTemplate = anim;
+      if(players && players.length) players.forEach(p=>{ if(p.kind==='tank'){ p.animator = cloneAnimator(tankAnimatorTemplate); p.useSprites = true; p.animator.play('idle'); } });
+    }
+    if(kind === 'mario' && !marioSprite){ marioSprite = spr; marioAnimatorTemplate = anim; }
+  };
+  return img;
+}
+
+// generate ninja and tank sheets at startup (sizes chosen to match p.w/p.h defaults)
+generateProceduralSheet('ninja', 36, 54);
+generateProceduralSheet('tank', 84, 126);
+
+// --- Editor UI wiring ---
+function refreshAnimLists(){
+  const animList = document.getElementById('animList');
+  const hitAnim = document.getElementById('hitAnim');
+  animList.innerHTML = '';
+  hitAnim.innerHTML = '';
+  if(!marioAnimatorTemplate) return;
+  for(const k in marioAnimatorTemplate.animations){
+    const o = document.createElement('option'); o.value = k; o.textContent = k; animList.appendChild(o);
+    const o2 = document.createElement('option'); o2.value = k; o2.textContent = k; hitAnim.appendChild(o2);
+  }
+}
+
+document.getElementById('applyGrid').addEventListener('click', ()=>{
+  const fw = parseInt(document.getElementById('frameW').value)||32;
+  const fh = parseInt(document.getElementById('frameH').value)||32;
+  if(!marioImg.complete){ alert('Sprite no cargado aún. Coloca assets/mario_ssb.png y recarga.'); return; }
+  marioSprite = new SpriteSheet(marioImg, fw, fh);
+  // rebuild template animator keeping existing definitions if any
+  const oldDefs = (marioAnimatorTemplate && marioAnimatorTemplate.animations) ? marioAnimatorTemplate.animations : {};
+  marioAnimatorTemplate = new Animator(marioSprite);
+  for(const k in oldDefs){ const a = oldDefs[k]; marioAnimatorTemplate.define(k, a.frames.slice(), a.fps, a.loop); if(a.hitframes) marioAnimatorTemplate.animations[k].hitframes = JSON.parse(JSON.stringify(a.hitframes)); }
+  // attach to player if present
+  if(players && players[0]){ players[0].animator = cloneAnimator(marioAnimatorTemplate); players[0].useSprites = true; players[0].animator.play('idle'); attachAnimatorHitframeHandler(players[0]); }
+  refreshAnimLists();
+  msg('Grid aplicado: '+fw+'x'+fh);
+});
+
+document.getElementById('addAnim').addEventListener('click', ()=>{
+  const name = document.getElementById('animName').value.trim();
+  const framesCsv = document.getElementById('animFrames').value.trim();
+  const fps = parseInt(document.getElementById('animFPS').value)||12;
+  const loop = !!document.getElementById('animLoop').checked;
+  if(!name || !framesCsv){ alert('Nombre y frames requeridos'); return; }
+  const frames = framesCsv.split(',').map(s=>parseInt(s.trim())).filter(n=>!isNaN(n));
+  if(!marioAnimatorTemplate) marioAnimatorTemplate = new Animator(marioSprite||{frameW:32,frameH:32});
+  marioAnimatorTemplate.define(name, frames, fps, loop);
+  // ensure hitframes array
+  marioAnimatorTemplate.animations[name].hitframes = marioAnimatorTemplate.animations[name].hitframes || [];
+  refreshAnimLists();
+  msg('Animación añadida: '+name+' ('+frames.length+' frames)');
+});
+
+document.getElementById('playAnim').addEventListener('click', ()=>{
+  const sel = document.getElementById('animList').value;
+  if(!sel) return; if(!marioAnimatorTemplate) return; const anim = marioAnimatorTemplate.animations[sel];
+  // play on a temp animator to preview
+  if(players && players[0]){ players[0].animator = cloneAnimator(marioAnimatorTemplate); players[0].useSprites = true; players[0].animator.play(sel); attachAnimatorHitframeHandler(players[0]); msg('Reproduciendo: '+sel); }
+});
+
+document.getElementById('assignP1').addEventListener('click', ()=>{
+  const sel = document.getElementById('animList').value; if(!sel) return; if(!marioAnimatorTemplate) return; players[0].animator = cloneAnimator(marioAnimatorTemplate); players[0].useSprites = true; players[0].animator.play(sel); attachAnimatorHitframeHandler(players[0]); msg('Asignada anim '+sel+' a P1');
+});
+
+document.getElementById('addHitframe').addEventListener('click', ()=>{
+  const anim = document.getElementById('hitAnim').value; if(!anim) return; const idx = parseInt(document.getElementById('hitFrameIdx').value)||0; const spec = document.getElementById('hitBoxSpec').value.trim(); const dmg = parseInt(document.getElementById('hitDamage').value)||8; const kb = parseInt(document.getElementById('hitKB').value)||220; const parts = spec.split(',').map(s=>parseInt(s.trim())); if(parts.length<4){ alert('HitBox spec must be x,y,w,h'); return; }
+  const box = {x:parts[0], y:parts[1], w:parts[2], h:parts[3]}; marioAnimatorTemplate.animations[anim].hitframes = marioAnimatorTemplate.animations[anim].hitframes || []; marioAnimatorTemplate.animations[anim].hitframes.push({frame:idx, box, damage:dmg, kb:kb}); msg('Hitframe añadido a '+anim+' frame '+idx);
+});
+
+// When animator frame changes, spawn hitboxes if hitframes defined
+Animator.prototype.onFrameCallback = null;
+const _origUpdate = Animator.prototype.update;
+Animator.prototype.update = function(dt){ _origUpdate.call(this, dt); // detect frame change
+  const anim = this.animations[this.current];
+  if(!anim) return;
+  const currentFrame = anim.frames[this.frameIndex % anim.frames.length];
+  if(this._lastFrame !== currentFrame){
+    // call callback with (animName, frameIndex, frameId)
+    if(this.onFrameCallback) this.onFrameCallback(this.current, this.frameIndex, currentFrame);
+    this._lastFrame = currentFrame;
+  }
+};
+
+// Hook player's animator to spawn hitboxes
+function attachAnimatorHitframeHandler(player){ if(!player || !player.animator) return; player.animator.onFrameCallback = (animName, frameIndex, frameId)=>{
+  const animDef = player.animator.animations[animName]; if(!animDef || !animDef.hitframes) return;
+  // find hitframes matching this frame index
+  animDef.hitframes.forEach(hf=>{ if(hf.frame === frameIndex){ // spawn hitbox relative to player
+      const bx = player.x + hf.box.x * (player.facing>0?1: -1) + (player.facing>0?0: -hf.box.w);
+      const by = player.y + hf.box.y;
+      const hb = { x: bx, y: by, w: hf.box.w, h: hf.box.h, owner: player, dur: 0.12, damage: hf.damage, kb: hf.kb };
+      hitboxes.push(hb);
+    } }); } }
+
+// Ensure we attach handler when assigning animator to player
+
+const oldCloneAnimator = cloneAnimator;
+function cloneAnimator(template){ const a = new Animator(template.sheet); for(const k in template.animations){ const anim = template.animations[k]; a.define(k, anim.frames.slice(), anim.fps, anim.loop); if(anim.hitframes) a.animations[k].hitframes = JSON.parse(JSON.stringify(anim.hitframes)); } a.onFrameCallback = null; return a; }
+
+class Player{
+  constructor(x,y,kind,controls){
+    this.x = x; this.y = y; this.vx = 0; this.vy = 0; this.w = 48; this.h = 72;
+    this.onGround = false; this.facing = 1; this.kind = kind || 'generic'; this.controls = controls;
+    this.percent = 0; this.stocks = 3; this.invuln = 0; this._attackCooldown = 0;
+    this.useSprites = false; this.animator = null; this.charData = null; this.jumpV = JUMP_V; this.color = '#888';
+    this._lastAttackDir = { x: 1, y: 0 }; // Store last attack direction for smash attacks
+    this.stun = 0; // Stun duration in seconds (cannot act while stunned)
+    this.baseW = 48; this.baseH = 72; // Base size for scaling
+    this.mass = 1.0; // mass multiplier: higher -> less velocity from knockback
+    this.prevY = this.y; // previous frame Y position (for one-way platforms)
+    this._platformIgnore = 0; // when >0, ignore platform collisions (for drop-through)
+  }
+
+  applyInput(dt){
+    if(this.stun > 0) return; // Cannot act while stunned
+    const c = this.controls; let ax = 0; const left = keys[c.left]; const right = keys[c.right];
+    if(left) ax -= (this.onGround?MOVE_ACC:AIR_ACC); if(right) ax += (this.onGround?MOVE_ACC:AIR_ACC);
+    this.vx += ax * dt;
+    if(!left && !right && this.onGround){ this.vx *= Math.pow(FRICTION, dt*60); if(Math.abs(this.vx) < 10) this.vx = 0; }
+    this.vx = Math.max(-MAX_SPEED, Math.min(MAX_SPEED, this.vx));
+    // detect down key (global mapping) for drop-through: ArrowDown or 's'
+    const downKey = keys['ArrowDown'] || keys['s'] || keys['S'];
+    // Drop-through: press down + jump while standing on a platform (not the main floor)
+    if(keys[c.jump] && downKey && this.onGround && (this.y + this.h) < floorY - 2){
+      // ignore platforms briefly so player falls through
+      this._platformIgnore = 0.45;
+      this.onGround = false;
+      // nudge down to ensure we exit platform intersection and start falling
+      this.y += 2;
+      this.vy = 120;
+    } else if(keys[c.jump] && this.onGround){ this.vy = -(this.jumpV || JUMP_V); this.onGround = false; sfxJump(); }
+    
+    // Attack input: determine direction based on input combination
+    if(keys[c.attack]){
+      if(!this._attackCooldown){
+        // Determine attack direction from current input
+        let attackDir = { x: this.facing, y: 0 };
+        
+        // P1 uses: W (up), S (down) combined with attack
+        // P2 uses: ↑ (up), ↓ (down) combined with attack
+        const upInput = c.jump ? keys[c.jump] : false;
+        const downInput = c.left && keys[c.left] && keys[c.right] ? false : (keys['ArrowDown'] || keys['s'] || keys['S']);
+        
+        // Detect directional input
+        if(upInput){ // Up-attack
+          attackDir = { x: 0, y: -1 };
+        } else if(downInput){ // Down-attack
+          attackDir = { x: 0, y: 1 };
+        } else if(left){ // Left-tilt
+          attackDir = { x: -1, y: 0 };
+        } else if(right){ // Right-tilt
+          attackDir = { x: 1, y: 0 };
+        } else { // Default facing direction
+          attackDir = { x: this.facing, y: 0 };
+        }
+        
+        this._lastAttackDir = attackDir;
+        this._fireAttack(attackDir);
+        this._attackCooldown = 0.35;
+      }
+    }
+    if(this._attackCooldown) this._attackCooldown = Math.max(0, this._attackCooldown - dt);
+  }
+
+  _fireAttack(dir){
+    dir = dir || { x: this.facing, y: 0 }; // Default: horizontal facing direction
+    
+    // determine which animation/move to use based on direction
+    let moveChoice = 'jab';
+    if(dir.y < 0) moveChoice = 'up_tilt'; // Up attack
+    else if(dir.y > 0) moveChoice = 'down_tilt'; // Down attack
+    else if(this.onGround) moveChoice = 'jab'; // Ground neutral
+    else moveChoice = 'fair'; // Air neutral
+    
+    if(this.animator && this.useSprites) this.animator.play(moveChoice);
+    
+    if(this._charMove) { this._charMove(moveChoice); }
+    else {
+      // Default hitbox generation with directional support
+      let hbX, hbY, hbW = 40, hbH = 30;
+      
+      if(dir.y < 0){ // Up attack
+        hbX = this.x + this.w/2 - 20;
+        hbY = this.y - 40;
+        hbW = 40; hbH = 35;
+      } else if(dir.y > 0){ // Down attack
+        hbX = this.x + this.w/2 - 20;
+        hbY = this.y + this.h;
+        hbW = 40; hbH = 35;
+      } else { // Horizontal
+        hbX = this.x + (dir.x > 0 ? this.w : -40);
+        hbY = this.y + 20;
+      }
+      
+      const dmgMult = dir.y !== 0 ? 1.15 : 1.0; // Slightly more damage for angled attacks
+      const hb = { 
+        x: hbX, y: hbY, w: hbW, h: hbH, owner: this, dur: 0.18, 
+        damage: Math.round(10 * dmgMult), kb: BASE_KB * (dir.y !== 0 ? 1.2 : 1.0)
+      };
+      hitboxes.push(hb);
+      
+      // Recoil based on direction
+      this.vx += dir.x * 40;
+      if(dir.y < 0) this.vy += 30; // Slight upward recoil for up attacks
+      if(dir.y > 0) this.vy -= 30; // Slight downward recoil for down attacks
+    }
+  }
+
+  update(dt){
+    // store previous Y to allow one-way platform detection (pass-through from below)
+    this.prevY = this.y;
+    this.vy += GRAVITY * dt;
+    this.x += this.vx * dt; this.y += this.vy * dt;
+    
+    // Reset ground state, will be set by collision checks
+    this.onGround = false;
+    
+    // Check floor collision (ground level)
+    if(this.y + this.h >= floorY){ 
+      this.y = floorY - this.h; 
+      this.vy = 0; 
+      this.onGround = true; 
+    }
+    // If not on floor, check platform collisions
+    else {
+      checkPlatformCollisions(this);
+    }
+    
+    if(this.vx > 6) this.facing = 1; else if(this.vx < -6) this.facing = -1;
+  if(this.invuln > 0) this.invuln = Math.max(0, this.invuln - dt);
+    if(this.stun > 0) this.stun = Math.max(0, this.stun - dt);
+    if(this._specialCooldown) this._specialCooldown = Math.max(0, this._specialCooldown - dt);
+    if(this._dashActive) this._dashActive = Math.max(0, this._dashActive - dt);
+  if(this._platformIgnore) this._platformIgnore = Math.max(0, this._platformIgnore - dt);
+
+    if(this.animator){ this.animator.update(dt);
+      if(this.animator && this.animator.current && !this.animator.current.includes('jab') && !this.animator.current.includes('fair') && !this.animator.current.includes('tilt') && !this.animator.current.includes('grab')){
+        if(!this.onGround && this.vy < 0){ if(this.animator.current !== 'jump') this.animator.play('jump'); }
+        else if(!this.onGround && this.vy >= 0){ if(this.animator.current !== 'falling') this.animator.play('falling'); }
+        else if(Math.abs(this.vx) > 50 && this.onGround){ if(this.animator.current !== 'running') this.animator.play('running'); }
+        else if(this.onGround){ if(this.animator.current !== 'idle') this.animator.play('idle'); }
+      }
+    }
+  }
+
+  draw(ctx){
+    if(this.useSprites && this.animator){ if(!this.animator.current) this.animator.play('idle'); this.animator.draw(ctx, this.x, this.y, this.w, this.h, this.facing<0); }
+    else if(this.kind === 'mario'){ drawMario(ctx,this.x,this.y,this.w,this.h,this.facing); }
+    else if(this.kind === 'ninja'){ drawNinja(ctx,this.x,this.y,this.w,this.h,this.facing); }
+    else if(this.kind === 'tank'){ drawTank(ctx,this.x,this.y,this.w,this.h,this.facing); }
+    else { drawGeneric(ctx,this.x,this.y,this.w,this.h,this.facing,this.color); }
+    
+    // Draw ground indicator (small circle below player if onGround)
+    if(this.onGround){
+      ctx.save();
+      ctx.fillStyle = this.color || '#888';
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath();
+      ctx.arc(this.x + this.w/2, this.y + this.h + 6, 4, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+    }
+    
+    ctx.save(); ctx.fillStyle = '#fff'; ctx.font = '14px sans-serif'; ctx.fillText(Math.round(this.percent)+'%', this.x+6, this.y-8); ctx.restore();
+  }
+
+  applyHit(damage,kb,sourceX,stun=0){
+    if(this.invuln>0) return false;
+    this.percent += damage;
+    const factor = 1 + this.percent/100;
+    const kbVal = kb * factor;
+    const dir = Math.sign(this.x + this.w/2 - sourceX) || 1;
+    const mass = this.mass || 1.0;
+    // apply knockback scaled by mass (heavier -> less velocity)
+    this.vx += dir * kbVal * 0.02 / mass;
+    this.vy -= kbVal * 0.015 / mass;
+    if(stun > 0) this.stun = stun;
+    sfxHit();
+    return true;
+  }
+}
+
+function drawGeneric(ctx,x,y,w,h,facing,color){ ctx.save(); ctx.fillStyle = color||'#888'; ctx.fillRect(x,y,w,h); ctx.restore(); }
+function drawMario(ctx,x,y,w,h,facing,frame=0){ // simple Mario-like drawing using shapes; frame 2 is jump pose
+  ctx.save();
+  // slight vertical offset for jump frame
+  const bob = frame === 2 ? -6 : 0;
+  ctx.translate(0, bob);
+  // body (overalls)
+  ctx.fillStyle = '#1e60b4'; ctx.fillRect(x+6, y+26, w-12, h-34);
+  // shirt
+  ctx.fillStyle = '#c42b2b'; ctx.fillRect(x+6, y+10, w-12, 18);
+  // head
+  ctx.fillStyle = '#f5cc9b'; ctx.beginPath(); ctx.ellipse(x + w/2, y + 18, w*0.34, h*0.18, 0, 0, Math.PI*2); ctx.fill();
+  // hat
+  ctx.fillStyle = '#c42b2b'; ctx.fillRect(x + w*0.17, y+2, w*0.66, 12);
+  ctx.fillStyle = '#8b1b1b'; ctx.fillRect(x + w*0.17, y+10, w*0.66, 4);
+  // mustache
+  ctx.fillStyle = '#2b1b0f'; ctx.fillRect(x + w*0.3, y+20, w*0.4, 6);
+  // eyes
+  ctx.fillStyle = '#000'; ctx.fillRect(x + w*0.36, y+16, 4, 4); ctx.fillRect(x + w*0.57, y+16, 4, 4);
+  // arms/legs: change pose for jump frame
+  if(frame === 2){
+    // jump: arms up, legs tucked
+    ctx.fillStyle = '#1e60b4'; ctx.fillRect(x+2, y+6, 8, 14); ctx.fillRect(x + w - 10, y+6, 8, 14);
+    ctx.fillStyle = '#1e60b4'; ctx.fillRect(x + w*0.32, y+36, 8, 18); ctx.fillRect(x + w*0.56, y+36, 8, 18);
+  } else {
+    // default arms
+    ctx.fillStyle = '#1e60b4'; ctx.fillRect(x+2, y+34, 8, 18); ctx.fillRect(x + w - 10, y+34, 8, 18);
+    ctx.fillStyle = '#1e60b4'; ctx.fillRect(x + w*0.28, y+52, 10, 12); ctx.fillRect(x + w*0.62, y+52, 10, 12);
+  }
+  // cap emblem (M)
+  ctx.fillStyle = '#fff'; ctx.font = '10px sans-serif'; ctx.fillText('M', x + w*0.46, y + 10);
+  ctx.restore(); }
+
+function drawNinja(ctx,x,y,w,h,facing,frame=0){
+  ctx.save();
+  // body (slim ninja suit)
+  ctx.translate(x + w/2, y);
+  if(facing < 0) ctx.scale(-1,1);
+  // subtle vertical bob for idle/run frame
+  const bob = frame === 1 ? -2 : 0;
+  ctx.translate(0, bob);
+  // cloak
+  ctx.fillStyle = '#111'; ctx.beginPath(); ctx.ellipse(0 + w*0.02, h*0.45, w*0.45, h*0.55, 0, 0, Math.PI*2); ctx.fill();
+  // belt
+  ctx.fillStyle = '#222'; ctx.fillRect(-w*0.25, h*0.45, w*0.5, h*0.12);
+  // head wrap
+  ctx.fillStyle = '#1a1a1a'; ctx.beginPath(); ctx.ellipse(0, h*0.18, w*0.28, h*0.22, 0, 0, Math.PI*2); ctx.fill();
+  // mask
+  ctx.fillStyle = '#9b59b6'; ctx.fillRect(-w*0.18, h*0.14, w*0.36, h*0.14);
+  // eyes
+  ctx.fillStyle = '#fff'; ctx.fillRect(-w*0.08, h*0.12, w*0.06, h*0.06); ctx.fillRect(w*0.02, h*0.12, w*0.06, h*0.06);
+  // arms and legs animation / jump pose
+  ctx.fillStyle = '#0f0f0f';
+  if(frame === 2){
+    // jump: arms up, legs tucked
+    ctx.fillRect(-w*0.48, h*0.18, w*0.12, h*0.12);
+    ctx.fillRect(w*0.36, h*0.18, w*0.12, h*0.12);
+    ctx.fillStyle = '#0b0b0b'; ctx.fillRect(-w*0.12, h*0.62, w*0.12, h*0.18); ctx.fillRect(w*0.0, h*0.62, w*0.12, h*0.18);
+  } else {
+    const armOffset = frame === 1 ? 6 : 0;
+    ctx.fillRect(-w*0.48 + armOffset, h*0.35, w*0.16, h*0.12);
+    ctx.fillRect(w*0.32 - armOffset, h*0.35, w*0.16, h*0.12);
+    // legs (animated stride)
+    const legOffset = frame === 1 ? 6 : 0;
+    ctx.fillStyle = '#0b0b0b'; ctx.fillRect(-w*0.22 + legOffset, h*0.7, w*0.16, h*0.28); ctx.fillRect(w*0.06 - legOffset, h*0.7, w*0.16, h*0.28);
+  }
+  ctx.restore();
+}
+
+// Simple procedural animator for procedural sprites (ninja/tank)
+function createProceduralAnimator(kind){
+  const a = { animations: {}, current: null, frameIndex: 0, time: 0 };
+  a.define = function(name, frames, fps=6, loop=true){ this.animations[name] = { frames, fps, loop }; };
+  a.play = function(name){ if(this.current !== name){ this.current = name; this.frameIndex = 0; this.time = 0; }};
+  // safer play: only play if defined
+  const _oldPlay = a.play;
+  a.play = function(name){ if(this.animations[name]) _oldPlay.call(this,name); };
+  a.update = function(dt){ if(!this.current) return; const anim = this.animations[this.current]; if(!anim) return; this.time += dt; const frameTime = 1/anim.fps; while(this.time >= frameTime){ this.time -= frameTime; this.frameIndex++; if(this.frameIndex >= anim.frames.length){ if(anim.loop) this.frameIndex = 0; else this.frameIndex = anim.frames.length-1; } } };
+  a.draw = function(ctx,x,y,w,h,flip=false){ if(!this.current) return; const anim = this.animations[this.current]; if(!anim) return; const fi = anim.frames[this.frameIndex % anim.frames.length]; if(kind === 'ninja') drawNinja(ctx,x,y,w,h, flip? -1:1, fi); else if(kind === 'tank') drawTank(ctx,x,y,w,h, flip? -1:1, fi); else if(kind === 'mario') drawMario(ctx,x,y,w,h, flip? -1:1, fi); };
+  a.define('idle',[0,1],2,true);
+  a.define('running',[0,1],8,true);
+  // single-frame jump/falling pose (frame 2)
+  a.define('jump',[2],1,false);
+  a.define('falling',[2],1,true);
+  return a;
+}
+
+function drawTank(ctx,x,y,w,h,facing,frame=0){
+  ctx.save();
+  // larger heavy torso
+  ctx.translate(x, y);
+  if(facing < 0) { ctx.translate(w,0); ctx.scale(-1,1); }
+  // slight squash for heavy idle vs windup frame
+  const shift = frame === 1 ? -4 : 0;
+  // armor body (jump pose uses slight tuck)
+  if(frame === 2){
+    ctx.fillStyle = '#c9822b'; ctx.fillRect(0, h*0.14, w, h*0.56);
+  } else {
+    ctx.fillStyle = '#c9822b'; ctx.fillRect(0, h*0.18 + shift, w, h*0.62 - shift);
+  }
+  // shoulders
+  ctx.fillStyle = '#a05f17'; ctx.fillRect(-w*0.08, h*0.06, w*0.28, h*0.18); ctx.fillRect(w*0.8, h*0.06, w*0.28, h*0.18);
+  // head (small)
+  ctx.fillStyle = '#f3d6b0'; ctx.beginPath(); ctx.ellipse(w*0.5, h*0.06, w*0.25, h*0.12, 0, 0, Math.PI*2); ctx.fill();
+  // visor
+  ctx.fillStyle = '#222'; ctx.fillRect(w*0.38, h*0.02, w*0.24, h*0.06);
+  // heavy legs
+  // heavy legs (jump pose tuck)
+  if(frame === 2){
+    ctx.fillStyle = '#8b5a1a'; ctx.fillRect(w*0.18, h*0.7, w*0.24, h*0.18); ctx.fillRect(w*0.58, h*0.7, w*0.24, h*0.18);
+  } else {
+    ctx.fillStyle = '#8b5a1a'; ctx.fillRect(w*0.08, h*0.78, w*0.32, h*0.22); ctx.fillRect(w*0.6, h*0.78, w*0.32, h*0.22);
+  }
+  // emblem
+  ctx.fillStyle = '#fff'; ctx.font = Math.max(10, w*0.12)+'px sans-serif'; ctx.fillText('T', w*0.44, h*0.5);
+  ctx.restore();
+}
+
+function defaultSetup(){
+  players = [];
+  const p1controls = {left:'a', right:'d', jump:'w', attack:'s'};
+  const p2controls = {left:'ArrowLeft', right:'ArrowRight', jump:'ArrowUp', attack:'ArrowDown'};
+  const p1 = new Player(180, floorY-72, 'mario', p1controls);
+  const p2 = new Player(600, floorY-72, 'generic', p2controls);
+  players.push(p1); players.push(p2);
+  // apply character selections if present
+  const sel1 = document.getElementById('charP1') ? document.getElementById('charP1').value : 'Mario';
+  const sel2 = document.getElementById('charP2') ? document.getElementById('charP2').value : 'Ninja';
+  applyCharacterToPlayer(players[0], CHARACTERS[sel1] || CHARACTERS['Mario']);
+  applyCharacterToPlayer(players[1], CHARACTERS[sel2] || CHARACTERS['Ninja']);
+  // small color fallback
+  if(!players[1].color) players[1].color = '#66b3ff';
+}
+
+function reset(){ defaultSetup(); hitboxes = []; updateHUD(); last = performance.now(); running=true; applySelections(); }
+
+function updateHitboxes(dt){ for(let i=hitboxes.length-1;i>=0;i--){ const hb=hitboxes[i]; hb.dur -= dt; if(hb.dur<=0){ hitboxes.splice(i,1); continue;} players.forEach(pl=>{ if(pl===hb.owner) return; if(aabb(hb.x,hb.y,hb.w,hb.h, pl.x,pl.y,pl.w,pl.h)){ const success=pl.applyHit(hb.damage,hb.kb,hb.x+hb.w/2,hb.stun||0); if(success){ hitboxes.splice(i,1); } } }); } }
+
+function updateProjectiles(dt){
+  for(let i=projectiles.length-1; i>=0; i--){
+    const proj = projectiles[i];
+    proj.x += proj.vx * dt; proj.y += proj.vy * dt;
+    proj.dur -= dt;
+    proj.vy += GRAVITY * dt * 0.5; // gravity effect on projectiles
+    if(proj.dur <= 0 || proj.x < leftBound || proj.x > rightBound || proj.y > H + 100){
+      projectiles.splice(i,1); continue;
+    }
+    // check collision with players
+    players.forEach(pl=>{
+      if(pl === proj.owner) return;
+      const d = Math.sqrt((proj.x - (pl.x + pl.w/2))**2 + (proj.y - (pl.y + pl.h/2))**2);
+      if(d < proj.radius + pl.w/2){
+        pl.applyHit(proj.damage, proj.kb, proj.x, proj.stun || 0);
+        projectiles.splice(i,1);
+      }
+    });
+  }
+}
+
+function aabb(x1,y1,w1,h1,x2,y2,w2,h2){ return x1 < x2 + w2 && x1 + w1 > x2 && y1 < y2 + h2 && y1 + h1 > y2; }
+// Check platform collisions for a player
+function checkPlatformCollisions(player){
+  const stage = STAGES[selectedStage] || STAGES[0];
+  const platforms = stage.platforms || [];
+  
+  // If player recently triggered a drop-through, ignore platform collisions briefly
+  if(player._platformIgnore && player._platformIgnore > 0) return false;
+
+  let onAnyPlatform = false;
+  
+  platforms.forEach(pf => {
+    // Horizontal overlap needed to land on top
+    const horizOverlap = player.x + player.w > pf.x && player.x < pf.x + pf.w;
+    if(!horizOverlap) return;
+
+    const prevBottom = (player.prevY !== undefined ? player.prevY : player.y) + player.h;
+    const currBottom = player.y + player.h;
+
+    // One-way platform top collision: only land if we were above (or at) the platform in the previous frame
+    // and now our bottom has crossed the platform top while moving downward.
+    if(prevBottom <= pf.y && currBottom >= pf.y && player.vy >= 0){
+      player.y = pf.y - player.h;
+      player.vy = 0;
+      player.onGround = true;
+      onAnyPlatform = true;
+      return; // landed; skip side collision handling for this platform
+    }
+
+    // If we're intersecting in other ways (e.g., side overlap while inside platform), resolve minimally
+    const colliding = aabb(player.x, player.y, player.w, player.h, pf.x, pf.y, pf.w, pf.h);
+    if(colliding){
+      const playerBottom = player.y + player.h;
+      const playerTop = player.y;
+      const playerLeft = player.x;
+      const playerRight = player.x + player.w;
+
+      const platformTop = pf.y;
+      const platformBottom = pf.y + pf.h;
+      const platformLeft = pf.x;
+      const platformRight = pf.x + pf.w;
+
+      const overlapTop = playerBottom - platformTop;
+      const overlapBottom = platformBottom - playerTop;
+      const overlapLeft = playerRight - platformLeft;
+      const overlapRight = platformRight - playerLeft;
+
+      const minOverlap = Math.min(overlapTop, overlapBottom, overlapLeft, overlapRight);
+      if(minOverlap === overlapLeft && player.vx > 0){
+        player.x = platformLeft - player.w;
+      } else if(minOverlap === overlapRight && player.vx < 0){
+        player.x = platformRight;
+      } else if(minOverlap === overlapBottom && player.vy < 0){
+        // head bonk: push down slightly
+        player.y = platformBottom;
+        player.vy = 0;
+      }
+    }
+  });
+  
+  return onAnyPlatform;
+}
+
+function aabb(x1,y1,w1,h1,x2,y2,w2,h2){ return x1 < x2 + w2 && x1 + w1 > x2 && y1 < y2 + h2 && y1 + h1 > y2; }
+
+function checkKO(){
+  const stage = STAGES[selectedStage] || STAGES[0];
+  const bz = stage.blastzones || { top: -120, bottom: 600, left: -150, right: W + 150 };
+  
+  players.forEach((p,idx)=>{
+    // Check if player is outside blastzones
+    if(p.y > bz.bottom || p.y < bz.top || p.x < bz.left || p.x > bz.right){
+      p.stocks -= 1;
+      sfxKO();
+      msg(`Player ${idx+1} K.O.! Stocks left: ${p.stocks}`);
+      updateHUD();
+      if(p.stocks <= 0){
+        msg(`Player ${idx+1} lost the match.`);
+        running = false;
+      }
+      // respawn at starting position
+      p.x = idx===0 ? 180 : 600;
+      p.y = floorY - p.h;
+      p.vx = 0; p.vy = 0;
+      p.percent = Math.max(0, p.percent - 10);
+      p.invuln = 0.8;
+    }
+  });
+}
+
+function updateHUD(){ document.getElementById('p1percent').textContent = Math.round(players[0].percent); document.getElementById('p2percent').textContent = Math.round(players[1].percent); document.getElementById('p1stocks').textContent = players[0].stocks; document.getElementById('p2stocks').textContent = players[1].stocks; }
+function msg(t){ document.getElementById('msg').textContent = t; }
+
+function update(dt){ if(!running) return; players.forEach(p=>{ p.applyInput(dt); p.update(dt); }); updateHitboxes(dt); updateProjectiles(dt); checkKO(); updateHUD(); }
+
+function render(){
+  ctx.clearRect(0,0,W,H);
+  // draw stage background gradient
+  const stage = STAGES[selectedStage] || STAGES[0];
+  const g = ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0, stage.bg[0]); g.addColorStop(1, stage.bg[1]); ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+  
+  // draw blastzones (invisible kill boundaries) as semi-transparent red lines
+  const bz = stage.blastzones || { top: -120, bottom: 600, left: -150, right: W + 150 };
+  ctx.strokeStyle = 'rgba(255, 50, 50, 0.3)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([5, 5]);
+  // top blastzone
+  ctx.beginPath(); ctx.moveTo(bz.left, bz.top); ctx.lineTo(bz.right, bz.top); ctx.stroke();
+  // bottom blastzone
+  ctx.beginPath(); ctx.moveTo(bz.left, bz.bottom); ctx.lineTo(bz.right, bz.bottom); ctx.stroke();
+  // left blastzone
+  ctx.beginPath(); ctx.moveTo(bz.left, bz.top); ctx.lineTo(bz.left, bz.bottom); ctx.stroke();
+  // right blastzone
+  ctx.beginPath(); ctx.moveTo(bz.right, bz.top); ctx.lineTo(bz.right, bz.bottom); ctx.stroke();
+  ctx.setLineDash([]);
+  
+  // draw platforms
+  ctx.fillStyle = 'rgba(40,40,40,0.6)'; ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  stage.platforms.forEach(pf=>{ 
+    ctx.fillStyle = 'rgba(80, 120, 180, 0.75)'; 
+    ctx.fillRect(pf.x, pf.y, pf.w, pf.h); 
+    ctx.strokeStyle = 'rgba(150, 200, 255, 0.8)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(pf.x, pf.y, pf.w, pf.h); 
+  });
+  // draw ground
+  ctx.fillStyle = 'rgba(40,80,40,0.9)'; ctx.fillRect(0,floorY,W,H-floorY);
+
+  // draw projectiles
+  projectiles.forEach(proj=>{
+    ctx.save();
+    ctx.fillStyle = '#ff9900';
+    ctx.beginPath();
+    ctx.arc(proj.x, proj.y, proj.radius, 0, Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,200,0,0.8)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
+  });
+
+  // hitboxes and players
+  hitboxes.forEach(hb=>{ ctx.fillStyle='rgba(255,200,0,0.35)'; ctx.fillRect(hb.x,hb.y,hb.w,hb.h); });
+  players.forEach(p=>p.draw(ctx));
+}
+function loop(t){ const dt = Math.min(0.032,(t-last)/1000); last = t; update(dt); render(); requestAnimationFrame(loop); }
+
+document.getElementById('toggleP1').addEventListener('click', ()=>{ const p1 = players[0]; p1.kind = (p1.kind==='mario') ? 'generic' : 'mario'; msg('Player1 switched to '+p1.kind); });
+
+// Start match button wiring
+document.getElementById('startMatch').addEventListener('click', ()=>{ applySelections(); reset(); msg('Match started — ' + STAGES[selectedStage].name); });
+document.getElementById('stageSelect').addEventListener('change', ()=>{ const s = parseInt(document.getElementById('stageSelect').value)||0; selectedStage = s; msg('Escenario: '+STAGES[selectedStage].name); });
+
+// Tutorial system
+function showTutorial(){
+  const modal = document.getElementById('tutorialModal');
+  const body = document.getElementById('tutorialBody');
+  const step = tutorialSteps[tutorialStep] || tutorialSteps[0];
+  
+  document.getElementById('tutorialTitle').textContent = step.title;
+  body.innerHTML = step.content;
+  
+  const prevBtn = document.getElementById('tutorialPrev');
+  const nextBtn = document.getElementById('tutorialNext');
+  
+  prevBtn.style.display = tutorialStep > 0 ? 'block' : 'none';
+  nextBtn.textContent = tutorialStep >= tutorialSteps.length - 1 ? 'Finalizar' : 'Siguiente →';
+  
+  modal.classList.add('active');
+}
+
+function closeTutorial(){
+  const modal = document.getElementById('tutorialModal');
+  modal.classList.remove('active');
+  tutorialStep = 0;
+}
+
+document.getElementById('tutorialBtn').addEventListener('click', ()=>{ tutorialStep = 0; showTutorial(); });
+document.getElementById('tutorialPrev').addEventListener('click', ()=>{ if(tutorialStep > 0) { tutorialStep--; showTutorial(); } });
+document.getElementById('tutorialNext').addEventListener('click', ()=>{ 
+  if(tutorialStep >= tutorialSteps.length - 1) { closeTutorial(); } 
+  else { tutorialStep++; showTutorial(); } 
+});
+document.getElementById('tutorialClose').addEventListener('click', closeTutorial);
+
+// apply initial selections
+applySelections();
+reset(); requestAnimationFrame(loop);
+</script>
+</body>
+</html>
